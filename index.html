@@ -893,15 +893,22 @@ async function upsertProfile(u){
 }
 
 function showNavUser(u){
+  const el = document.getElementById('nav-auth');
+  if(!el) return;
   const name = u.user_metadata?.name||u.email.split('@')[0];
   const av = u.user_metadata?.avatar_url;
-  document.getElementById('nav-auth').innerHTML = `
+  el.innerHTML = `
     <span class="nav-uname">${name}</span>
     ${av ? `<img src="${av}" class="nav-avatar"/>` : `<div style="width:30px;height:30px;border-radius:50%;background:var(--card2);border:1.5px solid var(--star);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--star);">${name[0].toUpperCase()}</div>`}
-    <button onclick="signOut()" style="padding:5px 12px;background:transparent;border:1px solid rgba(251,113,133,.3);color:var(--rose);border-radius:6px;font-size:.72rem;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;">Sign out</button>`;
+    <button id="signout-btn" style="padding:5px 12px;background:transparent;border:1px solid rgba(251,113,133,.3);color:var(--rose);border-radius:6px;font-size:.72rem;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;">Sign out</button>`;
+  
+  document.getElementById('signout-btn')?.addEventListener('click', signOut);
+}
 }
 function showNavGuest(){
-  document.getElementById('nav-auth').innerHTML = `<button class="btn btn-ghost" onclick="openModal()">Log in</button><button class="btn btn-primary" onclick="openModal()">Start free ✦</button>`;
+  const el = document.getElementById('nav-auth');
+  if(!el) return;
+  el.innerHTML = `<button class="btn btn-ghost" onclick="openModal()">Log in</button><button class="btn btn-primary" onclick="openModal()">Start free ✦</button>`;
 }
 
 // ── AI QUESTION GENERATOR ────────────────
@@ -1092,7 +1099,7 @@ async function leaveQueue(){
 // ── BADGES ──────────────────────────────────────
 const BADGE_CFG = {
   warrior:{ icon:'⚔️', name:'WARRIOR', cardClass:'bcard-w', color:'var(--sky)',  req:'10 Easy',   field:'easy_solved',   reqN:10 },
-  eagle:  { icon:'🦅', name:'EAGLE',   cardClass:'bcard-e', color:'var(--mint)', req:'10 Medium', field:'medium_solved', reqN:10 },
+  eagle:  { icon:'🦅', name:'EAGLE',   cardClass:'bcard-e', color:'var(--peach)', req:'10 Medium', field:'medium_solved', reqN:10 },
   divine: { icon:'⚡', name:'DIVINE',  cardClass:'bcard-d', color:'var(--star)', req:'10 Hard',   field:'hard_solved',   reqN:10 },
 };
 
@@ -1131,25 +1138,51 @@ function renderBadges(profile) {
 function openBadgePage(url){ window.open(url,'_blank'); }
 
 // ── STATS ────────────────────────────────
+// ── STATS ────────────────────────────
 async function loadStats(){
-  const [q,p,b]=await Promise.all([
-    sb.from('questions').select('id',{count:'exact',head:true}),
-    sb.from('profiles').select('id',{count:'exact',head:true}),
-    sb.from('battles').select('id',{count:'exact',head:true})
-  ]);
-  cnt(document.getElementById('st-q'),q.count||0);
-  cnt(document.getElementById('st-p'),p.count||0);
-  cnt(document.getElementById('st-b'),b.count||0);
+  try {
+    const q = await sb.from('questions').select('id', {count:'exact', head:true});
+    const p = await sb.from('profiles').select('id', {count:'exact', head:true});
+    const b = await sb.from('battles').select('id', {count:'exact', head:true});
+    
+    const qEl = document.getElementById('st-q');
+    const pEl = document.getElementById('st-p');
+    const bEl = document.getElementById('st-b');
+    
+    if(qEl) cnt(qEl, q.count||0);
+    if(pEl) cnt(pEl, p.count||0);
+    if(bEl) cnt(bEl, b.count||0);
+  } catch(e) {
+    console.log('Stats error:', e);
+  }
 }
-function cnt(el,n){ if(!n){el.textContent='0';return;} let s=null; const r=ts=>{if(!s)s=ts;const p=Math.min((ts-s)/1600,1);el.textContent=Math.floor((1-Math.pow(1-p,3))*n);if(p<1)requestAnimationFrame(r);}; requestAnimationFrame(r); }
+function cnt(el,n){ 
+  if(!el) return;
+  if(!n){el.textContent='0';return;} 
+  let s=null; 
+  const r=ts=>{
+    if(!s)s=ts;
+    const p=Math.min((ts-s)/1600,1);
+    el.textContent=Math.floor((1-Math.pow(1-p,3))*n);
+    if(p<1)requestAnimationFrame(r);
+  }; 
+  requestAnimationFrame(r); 
+}
 
 // ── TICKER ────────────────────────────────
 async function loadTicker(){
-  const {data}=await sb.from('battles').select('winner_name,loser_name,question_title,duration_seconds').eq('status','completed').order('created_at',{ascending:false}).limit(8);
-  const el=document.getElementById('ticker-inner');
-  if(!data||data.length===0){el.innerHTML='<span class="t-empty">No battles yet — be the first to fight! ⚔</span>';return;}
-  const items=data.map(b=>`<span class="ti"><span class="tdot"></span><span class="twin">${b.winner_name}</span> defeated ${b.loser_name} in ${Math.floor(b.duration_seconds/60)}:${String(b.duration_seconds%60).padStart(2,'0')} · "${b.question_title}"</span>`);
-  el.innerHTML=`<div class="t-scroll">${[...items,...items].join('')}</div>`;
+  try {
+    const {data}=await sb.from('battles').select('winner_name,loser_name,question_title,duration_seconds').eq('status','completed').order('created_at',{ascending:false}).limit(8);
+    const el=document.getElementById('ticker-inner');
+    if(!el) return;
+    if(!data||data.length===0){el.innerHTML='<span class="t-empty">No battles yet — be the first to fight! ⚔</span>';return;}
+    const items=data.map(b=>`<span class="ti"><span class="tdot"></span><span class="twin">${b.winner_name}</span> defeated ${b.loser_name} in ${Math.floor(b.duration_seconds/60)}:${String(b.duration_seconds%60).padStart(2,'0')} · "${b.question_title}"</span>`);
+    el.innerHTML=`<div class="t-scroll">${[...items,...items].join('')}</div>`;
+  } catch(e) {
+    console.log('Ticker error:', e);
+    const el=document.getElementById('ticker-inner');
+    if(el) el.innerHTML='<span class="t-empty">Live battles loading…</span>';
+  }
 }
 
 // ── BATTLES ────────────────────────────────
